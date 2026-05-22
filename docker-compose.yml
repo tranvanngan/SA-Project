@@ -1,0 +1,59 @@
+version: '3.8'
+
+# ============================================================
+# Food Delivery System - Docker Compose
+# Nhóm 3 - UEH - Môn Thiết kế Kiến trúc Phần mềm
+# ============================================================
+
+services:
+
+  # Message Broker - trung gian truyền event giữa các service
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5673:5672"    # port cho service kết nối
+      - "15673:15672"  # port cho giao diện quản lý web
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # Order Service - xử lý đơn hàng (port 8001)
+  order-service:
+    build:
+      context: ./order_service
+    container_name: order-service
+    ports:
+      - "9001:8000"
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./order_service:/app
+
+  # Payment Service - xử lý thanh toán (port 8002)
+  payment-service:
+    build:
+      context: ./payment_service
+    container_name: payment-service
+    ports:
+      - "9002:8000"
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./payment_service:/app
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+
+  # Delivery Service - xử lý giao hàng (port 8003)
+  delivery-service:
+    build:
+      context: ./delivery_service
+    container_name: delivery-service
+    ports:
+      - "9003:8000"
+    depends_on:
+      - rabbitmq
+    volumes:
+      - ./delivery_service:/app
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
