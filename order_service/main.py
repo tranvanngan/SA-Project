@@ -1,7 +1,6 @@
 # ============================================================
 # ORDER SERVICE - Xử lý đơn đặt hàng
-# Sinh viên: Nhóm 3 - UEH
-# Môn: Thiết kế Kiến trúc Phần mềm
+# Môn: Kiến trúc Phần mềm hướng dịch vụ - UEH
 # ============================================================
 
 from fastapi import FastAPI, HTTPException

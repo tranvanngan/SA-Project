@@ -1,7 +1,6 @@
 # 🍔 Food Delivery System - Microservices Architecture
 
-> Tiểu luận môn Thiết kế Kiến trúc Phần mềm - UEH  
-> Nhóm 3
+> Tiểu luận môn Kiến trúc Phần mềm hướng dịch vụ - UEH
 
 ---
 
@@ -18,18 +17,18 @@ Gồm 3 service độc lập giao tiếp với nhau qua **RabbitMQ**.
 Khách hàng
     │
     ▼
-[Order Service :8001]  ──── tạo đơn hàng
+[Order Service :9001]  ── tạo đơn hàng
     │
     ▼
-[Payment Service :8002] ──── xử lý thanh toán
+[Payment Service :9002] ── xử lý thanh toán
     │
     │ publish event "order.paid"
     ▼
-[RabbitMQ :5672]
+[RabbitMQ :5673]
     │
     │ subscribe
     ▼
-[Delivery Service :8003] ──── tìm tài xế, giao hàng
+[Delivery Service :9003] ── tìm tài xế, giao hàng
 ```
 
 ---
@@ -38,10 +37,10 @@ Khách hàng
 
 | Service | Port | Chức năng |
 |---|---|---|
-| Order Service | 8001 | Tạo và quản lý đơn hàng |
-| Payment Service | 8002 | Xử lý thanh toán, publish event |
-| Delivery Service | 8003 | Nhận event, tìm tài xế, giao hàng |
-| RabbitMQ Dashboard | 15672 | Quản lý message queue |
+| Order Service | 9001 | Tạo và quản lý đơn hàng |
+| Payment Service | 9002 | Xử lý thanh toán, publish event |
+| Delivery Service | 9003 | Nhận event, tìm tài xế, giao hàng |
+| RabbitMQ Dashboard | 15673 | Quản lý message queue |
 
 ---
 
@@ -56,19 +55,19 @@ docker compose up --build -d
 ```
 
 ### Truy cập Swagger UI
-- Order: http://localhost:8001/docs
-- Payment: http://localhost:8002/docs  
-- Delivery: http://localhost:8003/docs
-- RabbitMQ: http://localhost:15672 (guest/guest)
+- Order: http://localhost:9001/docs
+- Payment: http://localhost:9002/docs  
+- Delivery: http://localhost:9003/docs
+- RabbitMQ: http://localhost:15673 (guest/guest)
 
 ---
 
 ## Luồng nghiệp vụ demo
 
-1. **Tạo đơn hàng** → POST http://localhost:8001/orders
-2. **Thanh toán** → POST http://localhost:8002/payments
-3. **Xem tài xế được phân công** → GET http://localhost:8003/deliveries
-4. **Tài xế cập nhật trạng thái** → PUT http://localhost:8003/deliveries/{id}/vi-tri
+1. **Tạo đơn hàng** → POST http://localhost:9001/orders
+2. **Thanh toán** → POST http://localhost:9002/payments
+3. **Xem tài xế được phân công** → GET http://localhost:9003/deliveries
+4. **Tài xế cập nhật trạng thái** → PUT http://localhost:9003/deliveries/{id}/vi-tri
 
 ---
 

@@ -2,7 +2,7 @@ version: '3.8'
 
 # ============================================================
 # Food Delivery System - Docker Compose
-# Nhóm 3 - UEH - Môn Thiết kế Kiến trúc Phần mềm
+# UEH - Môn Kiến trúc Phần mềm hướng dịch vụ
 # ============================================================
 
 services:
