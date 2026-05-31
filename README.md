@@ -1,7 +1,10 @@
 # 🍔 Food Delivery System - Microservices Architecture
 
 > Tiểu luận môn Kiến trúc Phần mềm hướng dịch vụ - UEH
-
+Nhóm Cá mồi ba cô gái
+1. Trần Văn Ngân (nhóm trưởng)
+2. Nguyễn Trần Thanh Vy
+3. Trần Minh Tuấn
 ---
 
 ## Giới thiệu hệ thống
