@@ -5,26 +5,37 @@
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 from typing import Optional
 import uuid
 import datetime
 import json
+import os
 import aio_pika  # thư viện kết nối RabbitMQ
 import asyncio
+import logging
 
-app = FastAPI(
-    title="Payment Service",
-    description="Service xử lý thanh toán và thông báo cho các service khác qua RabbitMQ",
-    version="1.0.0"
+# ---- Cấu hình logging ----
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("payment_service.log")
+    ]
 )
+logger = logging.getLogger("payment_service")
 
 # ---- Lưu tạm giao dịch trong memory ----
 giao_dich_db = {}
 
-# ---- Kết nối RabbitMQ ----
-RABBITMQ_URL = "amqp://guest:guest@localhost:5672/"
+# ---- Đọc URL RabbitMQ từ biến môi trường (không hardcode) ----
+# docker-compose.yml đã truyền: RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+RABBITMQ_URL = os.getenv("RABBITMQ_URL", "amqp://guest:guest@rabbitmq:5672/")
+
 rabbit_connection = None
 rabbit_channel = None
+
 
 async def ket_noi_rabbitmq():
     """Kết nối tới RabbitMQ khi service khởi động"""
@@ -32,11 +43,12 @@ async def ket_noi_rabbitmq():
     try:
         rabbit_connection = await aio_pika.connect_robust(RABBITMQ_URL)
         rabbit_channel = await rabbit_connection.channel()
-        print("[PAYMENT] Kết nối RabbitMQ thành công!")
+        logger.info(f"Kết nối RabbitMQ thành công: {RABBITMQ_URL}")
     except Exception as e:
-        print(f"[PAYMENT] Lỗi kết nối RabbitMQ: {e}")
+        logger.error(f"Lỗi kết nối RabbitMQ: {e}")
         # Nếu không kết nối được thì vẫn chạy bình thường
         # chỉ không publish event được thôi
+
 
 async def publish_event(ten_queue: str, du_lieu: dict):
     """
@@ -45,13 +57,13 @@ async def publish_event(ten_queue: str, du_lieu: dict):
     """
     global rabbit_channel
     if rabbit_channel is None:
-        print(f"[PAYMENT] Chưa kết nối RabbitMQ, bỏ qua event: {ten_queue}")
+        logger.warning(f"Chưa kết nối RabbitMQ, bỏ qua event: {ten_queue}")
         return
-    
+
     try:
         # Khai báo queue (tạo nếu chưa có)
-        queue = await rabbit_channel.declare_queue(ten_queue, durable=True)
-        
+        await rabbit_channel.declare_queue(ten_queue, durable=True)
+
         # Chuyển dữ liệu sang JSON rồi gửi
         tin_nhan = json.dumps(du_lieu, ensure_ascii=False)
         await rabbit_channel.default_exchange.publish(
@@ -61,19 +73,30 @@ async def publish_event(ten_queue: str, du_lieu: dict):
             ),
             routing_key=ten_queue
         )
-        print(f"[PAYMENT] Đã publish event '{ten_queue}': {tin_nhan}")
+        logger.info(f"Đã publish event '{ten_queue}' cho đơn: {du_lieu.get('don_hang_id')}")
     except Exception as e:
-        print(f"[PAYMENT] Lỗi publish event: {e}")
+        logger.error(f"Lỗi publish event: {e}")
 
 
-@app.on_event("startup")
-async def startup():
+# ---- Lifespan thay cho @app.on_event đã bị deprecated ----
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Chạy khi khởi động
     await ket_noi_rabbitmq()
-
-@app.on_event("shutdown")  
-async def shutdown():
-    if rabbit_connection:
+    logger.info("Payment Service khởi động tại port 9002")
+    yield
+    # Chạy khi tắt
+    if rabbit_connection and not rabbit_connection.is_closed:
         await rabbit_connection.close()
+        logger.info("Đã đóng kết nối RabbitMQ")
+
+
+app = FastAPI(
+    title="Payment Service",
+    description="Service xử lý thanh toán và thông báo cho các service khác qua RabbitMQ",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 
 # ---- Schema dữ liệu ----
@@ -118,7 +141,7 @@ def trang_chu():
 async def xu_ly_thanh_toan(request: YeuCauThanhToan):
     """
     Xử lý thanh toán cho đơn hàng.
-    
+
     Luồng xử lý:
     1. Nhận yêu cầu thanh toán
     2. Gọi cổng thanh toán (giả lập)
@@ -127,14 +150,14 @@ async def xu_ly_thanh_toan(request: YeuCauThanhToan):
     """
     giao_dich_id = str(uuid.uuid4())[:8].upper()
     thoi_gian = datetime.datetime.now().isoformat()
-    
+
     # Bước 2: Xử lý thanh toán
     thanh_cong = xu_ly_thanh_toan_gia_lap(request.phuong_thuc, request.so_tien)
-    
+
     if thanh_cong:
         trang_thai = "thanh_cong"
         thong_bao = f"Thanh toán {request.so_tien:,.0f} VND qua {request.phuong_thuc} thành công!"
-        
+
         # Bước 3: Publish event để Delivery Service biết mà xử lý
         event_data = {
             "event": "order.paid",  # tên event
@@ -145,11 +168,19 @@ async def xu_ly_thanh_toan(request: YeuCauThanhToan):
             "thoi_gian": thoi_gian
         }
         await publish_event("order.paid", event_data)
-        
+
     else:
         trang_thai = "that_bai"
         thong_bao = "Thanh toán thất bại. Vui lòng thử lại!"
-    
+
+        # Fix Lỗi 2: Notify Order Service khi thanh toán thất bại → hủy đơn
+        await publish_event("order.status.update", {
+            "event": "order.payment_failed",
+            "don_hang_id": request.don_hang_id,
+            "ly_do": "Thanh toán thất bại",
+            "thoi_gian": thoi_gian
+        })
+
     # Lưu giao dịch
     ket_qua = {
         "giao_dich_id": giao_dich_id,
@@ -161,8 +192,8 @@ async def xu_ly_thanh_toan(request: YeuCauThanhToan):
         "thong_bao": thong_bao
     }
     giao_dich_db[giao_dich_id] = ket_qua
-    
-    print(f"[PAYMENT] Giao dịch {giao_dich_id}: {trang_thai}")
+
+    logger.info(f"Giao dịch {giao_dich_id}: {trang_thai} - Đơn hàng: {request.don_hang_id}")
     return ket_qua
 
 
@@ -170,6 +201,7 @@ async def xu_ly_thanh_toan(request: YeuCauThanhToan):
 def xem_giao_dich(giao_dich_id: str):
     """Xem thông tin giao dịch theo ID"""
     if giao_dich_id not in giao_dich_db:
+        logger.warning(f"Không tìm thấy giao dịch: {giao_dich_id}")
         raise HTTPException(status_code=404, detail="Không tìm thấy giao dịch")
     return giao_dich_db[giao_dich_id]
 
@@ -177,6 +209,7 @@ def xem_giao_dich(giao_dich_id: str):
 @app.get("/payments")
 def xem_tat_ca_giao_dich():
     """Xem tất cả giao dịch"""
+    logger.info(f"Lấy danh sách giao dịch, tổng số: {len(giao_dich_db)}")
     return {
         "tong_so": len(giao_dich_db),
         "giao_dich": list(giao_dich_db.values())
