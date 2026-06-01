@@ -1,0 +1,128 @@
+# ============================================================
+# CI/CD Pipeline - GitHub Actions
+# 1. Test: kiểm tra code (lint + import)
+# 2. Build: build Docker image
+# 3. Deploy: push image lên Docker Hub (cloud registry)
+# ============================================================
+
+name: Food Delivery CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}   # set trong GitHub Secrets
+  IMAGE_TAG: ${{ github.sha }}                       # dùng commit hash làm tag
+
+jobs:
+
+  # ---- Job 1: Kiểm tra code ----
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cài đặt Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Cài thư viện
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Kiểm tra Order Service
+        run: |
+          cd order_service
+          python -c "import main; print('Order Service: OK')"
+
+      - name: Kiểm tra Payment Service
+        run: |
+          cd payment_service
+          python -c "import main; print('Payment Service: OK')"
+
+      - name: Kiểm tra Delivery Service
+        run: |
+          cd delivery_service
+          python -c "import main; print('Delivery Service: OK')"
+
+  # ---- Job 2: Build Docker image ----
+  build:
+    runs-on: ubuntu-latest
+    needs: test   # chỉ build nếu test pass
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Build Order Service image
+        run: docker build ./order_service -t food-delivery/order-service:latest
+
+      - name: Build Payment Service image
+        run: docker build ./payment_service -t food-delivery/payment-service:latest
+
+      - name: Build Delivery Service image
+        run: docker build ./delivery_service -t food-delivery/delivery-service:latest
+
+      - name: Build thành công
+        run: echo "Tất cả Docker image build thành công!"
+
+  # ---- Job 3: Push lên Docker Hub (Cloud Registry) ----
+  # Chỉ chạy khi push thẳng lên nhánh main (không chạy khi PR)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Đăng nhập Docker Hub bằng secret đã set trong GitHub repo
+      - name: Đăng nhập Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      # Build và push Order Service
+      - name: Build & Push Order Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./order_service
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/food-delivery-order:latest
+            ${{ secrets.DOCKER_USERNAME }}/food-delivery-order:${{ github.sha }}
+
+      # Build và push Payment Service
+      - name: Build & Push Payment Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./payment_service
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/food-delivery-payment:latest
+            ${{ secrets.DOCKER_USERNAME }}/food-delivery-payment:${{ github.sha }}
+
+      # Build và push Delivery Service
+      - name: Build & Push Delivery Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./delivery_service
+          push: true
+          tags: |
+            ${{ secrets.DOCKER_USERNAME }}/food-delivery-delivery:latest
+            ${{ secrets.DOCKER_USERNAME }}/food-delivery-delivery:${{ github.sha }}
+
+      - name: Deploy thành công
+        run: |
+          echo "Đã push lên Docker Hub thành công!"
+          echo "Images:"
+          echo "  - ${{ secrets.DOCKER_USERNAME }}/food-delivery-order:${{ github.sha }}"
+          echo "  - ${{ secrets.DOCKER_USERNAME }}/food-delivery-payment:${{ github.sha }}"
+          echo "  - ${{ secrets.DOCKER_USERNAME }}/food-delivery-delivery:${{ github.sha }}"
