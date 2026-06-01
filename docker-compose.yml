@@ -3,34 +3,45 @@ version: '3.8'
 # ============================================================
 # Food Delivery System - Docker Compose
 # UEH - Môn Kiến trúc Phần mềm hướng dịch vụ
+#
+# Kiến trúc: Microservices + Event-Driven (RabbitMQ)
+# Entry point duy nhất: API Gateway nginx (port 8080)
 # ============================================================
 
 services:
 
-  # Message Broker - trung gian truyền event giữa các service
+  # ---- Message Broker ----
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq
     ports:
-      - "5673:5672"    # port cho service kết nối
-      - "15673:15672"  # port cho giao diện quản lý web
+      - "5673:5672"     # port cho service kết nối
+      - "15673:15672"   # giao diện quản lý web
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Order Service - xử lý đơn hàng (port 8001)
+  # ---- Order Service (port 9001, internal 8000) ----
   order-service:
     build:
       context: ./order_service
     container_name: order-service
     ports:
-      - "9001:8000"
+      - "9001:8000"   # expose trực tiếp để dev dùng Swagger
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
     volumes:
       - ./order_service:/app
 
-  # Payment Service - xử lý thanh toán (port 8002)
+  # ---- Payment Service (port 9002, internal 8000) ----
   payment-service:
     build:
       context: ./payment_service
@@ -38,13 +49,14 @@ services:
     ports:
       - "9002:8000"
     depends_on:
-      - rabbitmq
-    volumes:
-      - ./payment_service:/app
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    volumes:
+      - ./payment_service:/app
 
-  # Delivery Service - xử lý giao hàng (port 8003)
+  # ---- Delivery Service (port 9003, internal 8000) ----
   delivery-service:
     build:
       context: ./delivery_service
@@ -52,8 +64,23 @@ services:
     ports:
       - "9003:8000"
     depends_on:
-      - rabbitmq
-    volumes:
-      - ./delivery_service:/app
+      rabbitmq:
+        condition: service_healthy
     environment:
       - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    volumes:
+      - ./delivery_service:/app
+
+  # ---- API Gateway — nginx (port 8080) ----
+  # Client chỉ cần gọi qua đây, không cần biết service nào ở port nào
+  api-gateway:
+    image: nginx:alpine
+    container_name: api-gateway
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./api_gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - order-service
+      - payment-service
+      - delivery-service
