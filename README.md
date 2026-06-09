@@ -7,7 +7,12 @@ Danh sách thành viên:
 2. Nguyễn Trần Thanh Vy
 3. Trần Minh Tuấn
 ---
-
+Mục tiêu
+Quản lý đơn hàng trực tuyến.
+Xử lý thanh toán đơn hàng.
+Quản lý quá trình giao hàng.
+Minh họa mô hình giao tiếp bất đồng bộ giữa các Microservices.
+Đảm bảo khả năng mở rộng và bảo trì hệ thống.
 ## Kiến trúc tổng quan
 
 ```
@@ -94,10 +99,15 @@ PUT http://localhost:8080/api/deliveries/{id}/vi-tri
 
 ## Công nghệ sử dụng
 
-- **Python 3.11** + **FastAPI** — framework backend
-- **RabbitMQ** — message broker cho Event-Driven
-- **nginx** — API Gateway
-- **Docker** + **Docker Compose** — containerization
-- **Pydantic** — validation dữ liệu
-- **aio-pika** — thư viện kết nối RabbitMQ bất đồng bộ
-- **GitHub Actions** — CI/CD pipeline
+-| Công nghệ      | Mục đích               |
+| -------------- | ---------------------- |
+| Python 3.11    | Ngôn ngữ lập trình     |
+| FastAPI        | Xây dựng REST API      |
+| RabbitMQ       | Message Broker         |
+| aio-pika       | Kết nối RabbitMQ       |
+| Nginx          | API Gateway            |
+| Docker         | Containerization       |
+| Docker Compose | Orchestration          |
+| Pydantic       | Data Validation        |
+| GitHub Actions | Continuous Integration |
+
