@@ -1,7 +1,11 @@
 # 🍔 Food Delivery System - Microservices Architecture
 
 > Tiểu luận môn Kiến trúc Phần mềm hướng dịch vụ - UEH
-
+Nhóm HeHe
+Danh sách thành viên:
+1. Trần Văn Ngân (nhóm trưởng)
+2. Nguyễn Trần Thanh Vy
+3. Trần Minh Tuấn
 ---
 
 ## Kiến trúc tổng quan
