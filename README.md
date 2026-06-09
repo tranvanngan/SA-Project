@@ -94,7 +94,22 @@ GET http://localhost:8080/api/deliveries
 #    → Delivery tự publish event → Order tự cập nhật sang da_giao
 PUT http://localhost:8080/api/deliveries/{id}/vi-tri
 ```
+Đặc trưng kiến trúc đạt được
+Loose Coupling
 
+Các dịch vụ không gọi trực tiếp lẫn nhau mà giao tiếp thông qua RabbitMQ.
+
+Scalability
+
+Mỗi service có thể mở rộng độc lập theo nhu cầu.
+
+Fault Isolation
+
+Lỗi ở một service không làm sập toàn bộ hệ thống.
+
+Maintainability
+
+Mỗi service được phát triển và triển khai riêng biệt.
 ---
 
 ## Công nghệ sử dụng
